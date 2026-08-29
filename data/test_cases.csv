@@ -1,0 +1,10 @@
+current_cost,baseline_cost,current_usage,baseline_usage,recent_deployment,expected_pattern,true_state
+1450,1000,105000,100000,TRUE,FALSE,cost_incident
+1040,1000,102000,100000,FALSE,FALSE,normal
+1500,1000,148000,100000,FALSE,FALSE,legitimate_growth
+1350,1000,100000,100000,FALSE,TRUE,expected_pattern
+1600,1000,103000,100000,TRUE,FALSE,cost_incident
+2000,1000,150000,100000,TRUE,TRUE,legitimate_growth
+1200,1000,100000,100000,FALSE,TRUE,normal
+900,1000,50000,100000,FALSE,TRUE,normal
+1500,1000,120000,100000,TRUE,TRUE,legitimate_growth
