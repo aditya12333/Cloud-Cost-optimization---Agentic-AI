@@ -1,1072 +1,1018 @@
-# Cloud Cost Decision Agent
+# Cloud Cost Decision Agent — Real-Data FinOps Version
 
-An AI-native decision agent for reasoning about unusual cloud-cost behaviour under uncertainty.
+## Overview
 
-Rather than using a simple rule such as:
+This project extends a synthetic cloud-cost decision agent into a real-data FinOps investigation system using the FinOps Foundation FOCUS billing dataset.
 
-> "Cost increased by 30% → send an alert"
+The core problem is:
 
-the system maintains a belief over possible explanations, decides whether enough evidence exists to act, requests additional evidence when necessary, and accounts for the cost of unnecessary investigation or delayed incident response.
+> When cloud cost increases significantly, is the increase caused by legitimate workload growth, expected behaviour, a new cost driver, accounting effects, pricing changes, or a genuine cost incident?
 
-The project is being developed incrementally:
-
-- **V1** — belief-based decision agent
-- **V2** — environment-aware decision policy
-- **V3** — active evidence gathering and feedback loop
-- **Next phase** — validation on real FinOps cloud billing data
-
----
-
-## Problem
-
-Cloud-cost increases are not automatically incidents.
-
-A cost increase could represent:
-
-- normal variation,
-- a recurring historical pattern,
-- legitimate business growth,
-- or an actual cost incident.
-
-A simple threshold-based alerting system cannot distinguish between these explanations.
-
-The agent therefore answers a more useful question:
-
-> Given the evidence currently available, should we wait, investigate further, ask a human, or escalate?
-
----
-
-## Agent Design
-
-The system is modelled around six components:
-
-```text
-Observations
-     ↓
-Belief over hidden states
-     ↓
-Decision policy
-     ↓
-Action
-     ↓
-Optional evidence collection
-     ↓
-Feedback
-     ↓
-Updated belief
-     ↓
-Final action
-```
-
-### Observable Inputs
-
-The controlled experiment currently provides:
-
-- current cloud cost
-- historical baseline cost
-- current usage
-- historical baseline usage
-- whether the behaviour matches a historical pattern
-- whether a recent deployment occurred
-- environment (`production` / `development`)
-- service type
-
-The agent also derives:
-
-- percentage cost change
-- percentage usage change
-- unit cost
-- unit-cost change
-
----
-
-## Hidden States
-
-The actual cause of the cost behaviour is treated as hidden.
-
-The agent maintains a probability distribution over four possible states:
-
-| Hidden State | Meaning |
-|---|---|
-| `normal` | Ordinary cost variation |
-| `expected_pattern` | Cost behaviour matches a known recurring pattern |
-| `legitimate_growth` | Cost increased because usage/business activity increased |
-| `cost_incident` | Cost increased unexpectedly and may require intervention |
-
-Example initial belief:
-
-```python
-{
-    "normal": 0.25,
-    "expected_pattern": 0.25,
-    "legitimate_growth": 0.25,
-    "cost_incident": 0.25
-}
-```
-
-The agent never receives the hidden state while making its decision.
-
-The hidden label is used only for offline evaluation.
-
----
-
-## Available Actions
+The project is deliberately designed as a sequential decision system rather than a simple threshold-based anomaly detector.
 
 The agent can choose between four operational actions:
 
-| Action | Meaning |
-|---|---|
-| `WAIT` | Take no intervention and continue monitoring |
-| `GET_MORE_EVIDENCE` | Investigate before making a stronger decision |
-| `ASK_HUMAN` | Send the case for human review |
-| `ESCALATE` | Treat the situation as a high-confidence cost incident |
-
-`WAIT` does not mean ignoring the event permanently.
-
-In a production system it would mean:
-
 ```text
-Record decision
-      ↓
-Take no corrective action
-      ↓
-Continue monitoring
-      ↓
-Evaluate again later
-```
-
----
-
-# Version 1 — Belief-Based Decision Agent
-
-V1 introduced the basic reasoning architecture.
-
-Instead of making a decision directly from cost change, the agent first updates its belief about the hidden cause.
-
-## Initial Belief
-
-The system begins with an equal prior:
-
-```text
-normal               25%
-expected_pattern     25%
-legitimate_growth    25%
-cost_incident        25%
-```
-
-The belief is then updated using available evidence.
-
----
-
-## Historical Pattern Evidence
-
-If the current behaviour matches a historical pattern, probability is shifted toward:
-
-```text
-expected_pattern
-```
-
-If it does not match historical behaviour, probability is moved away from that explanation.
-
----
-
-## Cost vs Usage Evidence
-
-One of the main signals is whether cost and usage move together.
-
-Example:
-
-```text
-Cost:  +45%
-Usage:  +5%
-```
-
-A large cost increase without a corresponding usage increase provides evidence for:
-
-```text
-cost_incident
-```
-
-while:
-
-```text
-Cost:  +40%
-Usage: +35%
-```
-
-provides stronger evidence for:
-
-```text
-legitimate_growth
-```
-
----
-
-## Deployment Evidence
-
-A recent deployment increases the possibility that an operational change caused the cost increase.
-
-The deployment signal therefore modifies the incident belief.
-
----
-
-## V1 Policy
-
-V1 makes its action decision using the probability of `cost_incident`.
-
-```text
-P(incident) < 0.30
-    → WAIT
-
-0.30 ≤ P(incident) < 0.50
-    → GET_MORE_EVIDENCE
-
-0.50 ≤ P(incident) < 0.70
-    → ASK_HUMAN
-
-P(incident) ≥ 0.70
-    → ESCALATE
-```
-
-These thresholds are manually defined experimental assumptions rather than learned production thresholds.
-
----
-
-## Baseline Policy
-
-To evaluate whether probabilistic reasoning added value, I also implemented a simple threshold baseline:
-
-```text
-Cost increase > 30%
-       ↓
-ESCALATE
-
-Otherwise
-       ↓
 WAIT
-```
-
-This baseline is intentionally simple.
-
-It demonstrates the weakness of treating every large cost increase as an incident.
-
-For example, a 40% cost increase caused by a 40% increase in legitimate usage should not necessarily trigger the same response as a 40% cost increase with no usage growth.
-
----
-
-# Version 2 — Environment-Aware Decision Policy
-
-V1 treated all environments equally.
-
-In practice, however, the operational cost of making the wrong decision differs between environments.
-
-For example:
-
-```text
-Production incident
-```
-
-may require faster intervention than:
-
-```text
-Development cost anomaly
-```
-
-V2 therefore separates:
-
-> What does the agent believe?
-
-from:
-
-> How aggressively should the agent act on that belief?
-
-The belief model remains the same.
-
-Only the action policy changes.
-
----
-
-## Production Policy
-
-```text
-P(incident) < 0.25
-    → WAIT
-
-0.25 ≤ P(incident) < 0.45
-    → GET_MORE_EVIDENCE
-
-0.45 ≤ P(incident) < 0.65
-    → ASK_HUMAN
-
-P(incident) ≥ 0.65
-    → ESCALATE
-```
-
-Production uses lower intervention thresholds because the cost of missing an incident is assumed to be higher.
-
----
-
-## Development Policy
-
-```text
-P(incident) < 0.35
-    → WAIT
-
-0.35 ≤ P(incident) < 0.55
-    → GET_MORE_EVIDENCE
-
-0.55 ≤ P(incident) < 0.75
-    → ASK_HUMAN
-
-P(incident) ≥ 0.75
-    → ESCALATE
-```
-
-Development is deliberately more conservative about escalation.
-
-This introduces an important architectural distinction:
-
-```text
-Belief model
-    ↓
-"What is probably happening?"
-
-Policy
-    ↓
-"What should I do about it?"
-```
-
----
-
-# Version 3 — Active Evidence Gathering
-
-The biggest limitation of V1 and V2 was that:
-
-```text
 GET_MORE_EVIDENCE
+ASK_HUMAN
+ESCALATE
 ```
 
-was only an action label.
+The main idea is that a large cost increase should not automatically result in escalation.
 
-The agent did not actually decide:
-
-> What evidence should I collect?
-
-V3 adds an evidence-gathering loop.
+The agent should first determine whether the increase can be explained by actual resource usage, pricing, billing behaviour, historical patterns, or other evidence.
 
 ---
 
-## V3 Decision Flow
+# Current Agent Flow
 
 ```text
-Initial observations
+Cloud billing observation
         ↓
-Build belief
+Cost + usage features
+        ↓
+Historical comparison
+        ↓
+Initial belief
         ↓
 Initial action
         ↓
-Is action GET_MORE_EVIDENCE?
+────────────────────────────
+If more evidence is required
+────────────────────────────
         ↓
-       Yes
+CHECK_COST_DRIVER
         ↓
-Select evidence
+Driver-level billing evidence
         ↓
-Receive feedback
+Evidence interpretation
         ↓
-Update belief
+Belief update
         ↓
-Choose final action
+Final action
+        ↓
+Alert episode clustering
+        ↓
+Human review
 ```
 
-This turns the system from a one-shot classifier into a sequential decision process.
-
----
-
-## Evidence Types
-
-V3 can investigate:
-
-### 1. Service Breakdown
+The current hidden explanations considered by the agent are:
 
 ```text
-CHECK_SERVICE_BREAKDOWN
-```
-
-The purpose is to determine whether the increase is concentrated within a particular cloud service.
-
-Possible feedback includes:
-
-```text
-CONCENTRATED_SERVICE_SPIKE
-USAGE_ALIGNED_GROWTH
-NO_CLEAR_SERVICE_CAUSE
-```
-
----
-
-### 2. Deployment Details
-
-```text
-CHECK_DEPLOYMENT_DETAILS
-```
-
-The purpose is to investigate whether a recent deployment contains a cost-relevant infrastructure change.
-
-Possible feedback:
-
-```text
-COST_RELEVANT_CHANGE_FOUND
-NO_COST_RELEVANT_CHANGE
-```
-
----
-
-## Evidence Selection
-
-V3 initially uses a heuristic evidence-selection policy.
-
-For example:
-
-```python
-if (
-    belief["cost_incident"] >= 0.25
-    or belief["legitimate_growth"] >= 0.25
-):
-    CHECK_SERVICE_BREAKDOWN += 4
-
-if recent_deployment:
-    CHECK_DEPLOYMENT_DETAILS += 3
-```
-
-Evidence options also have an investigation cost.
-
-```text
-CHECK_SERVICE_BREAKDOWN     = 2
-CHECK_DEPLOYMENT_DETAILS    = 2
-```
-
-The evidence score is divided by its cost before selection.
-
-This is a heuristic value-per-cost approach.
-
-It is **not yet a statistically learned information-value model in V3**.
-
----
-
-# Feedback-Based Belief Updating
-
-Evidence does not directly determine the answer.
-
-Instead, it changes the belief distribution.
-
-For example:
-
-```text
-Initial belief:
-
-cost_incident = 0.375
-```
-
-The agent requests:
-
-```text
-CHECK_SERVICE_BREAKDOWN
-```
-
-and receives:
-
-```text
-CONCENTRATED_SERVICE_SPIKE
-```
-
-The incident probability increases.
-
-The updated belief is then passed through the action policy again.
-
-This allows the system to move through trajectories such as:
-
-```text
-GET_MORE_EVIDENCE
-       ↓
-CHECK_SERVICE_BREAKDOWN
-       ↓
-CONCENTRATED_SERVICE_SPIKE
-       ↓
-ASK_HUMAN
-```
-
-rather than treating investigation as the end of the decision.
-
----
-
-# Uncertainty Handling
-
-The system also distinguishes between:
-
-```text
-confident prediction
-```
-
-and:
-
-```text
-uncertain prediction
-```
-
-The two highest hidden-state probabilities are compared.
-
-If their difference is smaller than a tolerance:
-
-```text
-top_probability - second_probability < 0.02
-```
-
-the predicted state becomes:
-
-```text
-uncertain
-```
-
-`uncertain` is not a fifth hidden state.
-
-It represents the agent choosing not to confidently commit to one explanation.
-
-This is useful because:
-
-> An agent recognising uncertainty can be safer than an agent confidently selecting the wrong explanation.
-
----
-
-# Decision Cost
-
-Evaluation is not based only on classification accuracy.
-
-Different mistakes have different operational consequences.
-
-For example:
-
-```text
-True state = cost_incident
-Action     = WAIT
-```
-
-is much more costly than:
-
-```text
-True state = normal
-Action     = GET_MORE_EVIDENCE
-```
-
-The project therefore uses a decision-cost matrix.
-
-| True State | WAIT | GET_MORE_EVIDENCE | ASK_HUMAN | ESCALATE |
-|---|---:|---:|---:|---:|
-| normal | 0 | 1 | 2 | 4 |
-| expected_pattern | 0 | 1 | 2 | 4 |
-| legitimate_growth | 0 | 1 | 2 | 4 |
-| cost_incident | 10 | 2 | 1 | 0 |
-
-These are relative experimental costs, not monetary values.
-
-Their purpose is to represent the asymmetric consequences of different actions.
-
----
-
-# Evidence Cost
-
-Investigation is also not free.
-
-V3 therefore includes evidence-collection cost:
-
-| Evidence | Relative Cost |
-|---|---:|
-| `CHECK_SERVICE_BREAKDOWN` | 2 |
-| `CHECK_DEPLOYMENT_DETAILS` | 2 |
-
-The complete V3 trajectory cost is:
-
-```text
-Trajectory Cost
-    =
-Final Decision Cost
-    +
-Evidence Collection Cost
-```
-
-This prevents the agent from appearing successful simply by requesting unlimited investigation.
-
----
-
-# Controlled Evaluation Dataset
-
-V1–V3 were evaluated on a controlled synthetic benchmark.
-
-The dataset contains:
-
-```text
-40 cases
-```
-
-with balanced hidden states:
-
-```text
-10 normal
-10 expected_pattern
-10 legitimate_growth
-10 cost_incident
-```
-
-Each case contains observable information such as:
-
-```text
-current_cost
-baseline_cost
-
-current_usage
-baseline_usage
-
-recent_deployment
-matches_historical_pattern
-
-environment
-service_type
-```
-
-and one hidden evaluation label:
-
-```text
-true_state
-```
-
-The agent never sees `true_state` during decision making.
-
-Synthetic data was used deliberately because it provides known ground truth and allows controlled evaluation of whether the decision logic behaves as intended.
-
-It should **not** be interpreted as evidence of production performance.
-
----
-
-# Experimental Results
-
-The same 40 controlled cases were reused across versions to make the comparison consistent.
-
-## Decision Cost
-
-| Version | Decision Cost |
-|---|---:|
-| V1 | 34 |
-| V2 | 32 |
-| V3 final decisions | **12** |
-
-V2 reduced decision cost by introducing environment-sensitive action thresholds.
-
-V3 further improved the quality of the final decisions after additional evidence was incorporated.
-
-However, V3 also pays for evidence collection.
-
----
-
-## V3 Evidence Cost
-
-```text
-Evidence checks performed: 22
-
-Evidence collection cost: 44
-
-Final decision cost: 12
-
-Total trajectory cost: 56
-```
-
-Therefore:
-
-```text
-12 + 44 = 56
-```
-
-This highlights an important result:
-
-> More investigation can improve the final decision while still making the complete decision process more expensive.
-
-This means the agent must learn not only which evidence is useful, but whether the expected value of collecting it justifies its cost.
-
----
-
-# Evidence Effectiveness
-
-Across the 22 cases where V3 requested additional evidence:
-
-```text
-20 / 22
-```
-
-resulted in a change to the final action.
-
-Observed transitions included:
-
-```text
-GET_MORE_EVIDENCE → ASK_HUMAN
-GET_MORE_EVIDENCE → WAIT
-GET_MORE_EVIDENCE → GET_MORE_EVIDENCE
-```
-
-This demonstrated that feedback was actively influencing decisions rather than simply being logged.
-
----
-
-# Failure Analysis
-
-An important objective of this project is not only to measure success but also to identify situations where the agent's reasoning fails.
-
-Several useful failure modes emerged.
-
----
-
-## Failure 1 — Duplicate-Evidence Overconfidence
-
-An earlier V3 design allowed:
-
-```text
-CHECK_HISTORY
-```
-
-even though:
-
-```text
-matches_historical_pattern
-```
-
-had already been included in the initial observations.
-
-This caused historical-pattern information to be effectively counted twice.
-
-In one real test case within the synthetic experiment:
-
-```text
-true state = cost_incident
-```
-
-but repeated historical-pattern evidence pushed the belief toward:
-
-```text
+normal
 expected_pattern
+legitimate_growth
+cost_incident
 ```
 
-and produced:
-
-```text
-WAIT
-```
-
-This was a serious failure because the evidence was not independent.
-
-### Fix
-
-`CHECK_HISTORY` was removed from the active evidence selector.
-
-The lesson was:
-
-> Additional evidence is useful only when it provides genuinely new information.
+These beliefs are currently heuristic normalised scores and should not be interpreted as calibrated probabilities.
 
 ---
 
-## Failure 2 — Post-Confirmation Hesitation
+# Project Evolution
 
-Another case produced:
+The project has been developed in two main phases.
 
-```text
-Cost change  = +34%
-Usage change = -2%
-Environment  = development
-True state   = cost_incident
-```
+## Phase 1 — Controlled Synthetic Environment
 
-The initial incident belief was:
+The first version used synthetic cloud-cost observations.
 
-```text
-37.5%
-```
+The purpose was to create an environment where the true hidden state was known during evaluation while remaining hidden from the agent during decision-making.
 
-The agent selected:
+The synthetic agent was developed through several iterations:
 
 ```text
-CHECK_SERVICE_BREAKDOWN
+V1
+Simple belief model + threshold policy
+
+V2
+Environment-aware policy
+
+V3
+Sequential evidence acquisition
+
+V4
+Entropy + expected information gain
 ```
 
-and received:
+The synthetic environment allowed experimentation with:
 
 ```text
-CONCENTRATED_SERVICE_SPIKE
+belief updates
+decision costs
+uncertainty
+human escalation
+evidence acquisition
+information gain
+cost-sensitive evaluation
 ```
 
-Incident belief increased to approximately:
-
-```text
-52.3%
-```
-
-However, the development threshold for `ASK_HUMAN` was:
-
-```text
-55%
-```
-
-The final action therefore remained:
-
-```text
-GET_MORE_EVIDENCE
-```
-
-This failure mode was named:
-
-> **Post-confirmation hesitation**
-
-The evidence strongly supported an incident, but the manually selected policy threshold prevented the agent from progressing to human review.
-
-Potential future improvements include:
-
-- calibrated thresholds,
-- evidence-sensitive stopping rules,
-- learned action policies,
-- preventing repeated investigation loops.
+This phase was useful for understanding the decision architecture before moving onto real cloud billing data.
 
 ---
 
-## Failure 3 — Harmless Hidden-State Misclassification
+# Phase 2 — Real FinOps Data
 
-Not every incorrect hidden-state prediction creates a bad operational decision.
+The second phase replaces synthetic cost observations with real FinOps billing data.
 
-For example, one case had:
+The current dataset is the FinOps Foundation FOCUS sample dataset.
+
+Full dataset:
 
 ```text
-True state      = normal
-Predicted state = expected_pattern
-Final action    = WAIT
-Decision cost   = 0
+5,488,359 billing records
+44 columns
 ```
 
-The explanation was technically incorrect, but the operational decision was still appropriate.
+AWS portion:
 
-This illustrates an important principle:
+```text
+5,181,336 records
+```
 
-> Classification accuracy and decision quality are not the same metric.
+The current dataset covers:
 
-For decision agents, evaluating the consequences of the action can be more meaningful than evaluating state classification alone.
+```text
+September 2024
+```
+
+Because only one month of billing data is available, the current project focuses on short-term cost behaviour rather than long-term seasonal modelling.
 
 ---
 
-# Key Engineering Lessons
+# AWS Services Analysed
 
-Building V1–V3 exposed several important lessons.
-
-### 1. Threshold alerts are not enough
+The current real-data implementation focuses on:
 
 ```text
-cost spike ≠ automatically an incident
-```
-
-Context such as usage growth and historical behaviour matters.
-
-### 2. Belief and policy should be separate
-
-The system should distinguish:
-
-```text
-What do I believe is happening?
-```
-
-from:
-
-```text
-What should I do about it?
-```
-
-### 3. Environment changes decision risk
-
-The same belief may justify different actions in production and development.
-
-### 4. Evidence has a cost
-
-Requesting more information can improve decisions but still make the complete system less efficient.
-
-### 5. Evidence must be independent
-
-Reusing information that has already influenced the belief can create artificial confidence.
-
-### 6. Uncertainty should be explicit
-
-Sometimes:
-
-```text
-"I am uncertain"
-```
-
-is preferable to confidently selecting the wrong explanation.
-
-### 7. Accuracy alone is insufficient
-
-The system should also measure:
-
-- false positives,
-- false negatives,
-- decision cost,
-- investigation cost,
-- human-review burden,
-- unsafe decisions,
-- and complete decision trajectories.
-
----
-
-# Repository Structure
-
-```text
-student_project/
-│
-├── src/
-│   ├── features.py
-│   ├── belief.py
-│   ├── policy.py
-│   ├── evidence.py
-│   ├── feedback.py
-│   ├── cost.py
-│   └── agent.py
-│
-├── data/
-│   └── test_cases_v2.csv
-│
-├── experiments/
-│   └── evaluate.py
-│
-├── results/
-│   ├── predictionsv1_on_v2.csv
-│   ├── predictions_v2.csv
-│   └── predictions_v3.csv
-│
-├── probability-decision-record.md
-└── README.md
+Amazon Relational Database Service (RDS)
+Amazon Elastic File System (EFS)
+Amazon Simple Storage Service (S3)
+Amazon Elastic Container Service for Kubernetes (EKS)
 ```
 
 ---
 
-# Running the Experiment
+# Real Data Processing
 
-From the project root:
+The raw FOCUS dataset is transformed into several evidence layers.
 
-```bash
-python experiments/evaluate.py
-```
+## Hourly Service Cost
 
-The evaluation pipeline:
+Raw AWS billing records are aggregated by:
 
 ```text
-Loads the controlled cases
-        ↓
-Runs V1
-        ↓
-Runs V2
-        ↓
-Runs V3
-        ↓
-Records beliefs and actions
-        ↓
-Calculates decision costs
-        ↓
-Measures evidence usage
-        ↓
-Identifies high-cost failures
-        ↓
-Saves prediction outputs
+hour
+service
+```
+
+The resulting dataset contains approximately:
+
+```text
+26,325 hourly-service observations
+63 AWS services
+720 possible hourly timestamps
 ```
 
 ---
 
-# Current Limitations
+# Cost Decomposition
 
-V1–V3 are intentionally experimental.
+The project separates:
 
-Current limitations include:
+```text
+Usage Cost
+Credits
+Other Cost
+EffectiveCost
+BilledCost
+```
 
-- evaluation uses synthetic rather than production-labelled cloud incidents,
-- belief-update weights are manually specified,
-- decision thresholds are manually selected,
-- evidence feedback is simulated,
-- evidence outcomes are deterministic,
-- service-specific behaviour is not yet learned,
-- long-term seasonal patterns are not yet modelled,
-- real deployment metadata is not yet integrated,
-- costs are relative decision costs rather than financial estimates.
-
-These limitations are important because the current probabilities should not yet be interpreted as calibrated real-world incident probabilities.
+This matters because a cloud service can have stable operational usage while credits or accounting adjustments significantly change its reported EffectiveCost.
 
 ---
 
-# Next Phase — Real Cloud Billing Data
+# Usage-Cost Features
 
-The controlled experiment established the reasoning architecture.
-
-The next phase moves from:
+The feature pipeline calculates:
 
 ```text
-Synthetic observations
-        ↓
-Known hidden labels
+24-hour usage cost
+previous 7-day baseline
+cost percentage change
+usage percentage change
+historical cost percentile
+credit offset ratio
+unit-cost behaviour
+historical-pattern deviation
+```
+
+All rolling historical features are calculated using only past observations.
+
+Future observations are never included in the current timestamp's baseline.
+
+---
+
+# Leakage-Safe Historical Percentiles
+
+Historical percentiles are calculated using only observations available before the current timestamp.
+
+For example:
+
+```text
+cost percentile = 98.8
+```
+
+means the current cost behaviour is more extreme than approximately 98.8% of prior observations available to the agent.
+
+---
+
+# Service-Specific Usage Evidence
+
+Different AWS services use different billing units.
+
+Examples include:
+
+```text
+Hours
+GB
+GB-Months
+IOs
+```
+
+Current primary signals include:
+
+```text
+EKS → Hours
+RDS → Hours
+EFS → GB
+S3 → GB
+```
+
+For S3 storage behaviour, daily `GB-Months` evidence is also used because storage usage does not behave like a normal hourly metric.
+
+---
+
+# Historical Pattern Detection
+
+The system also checks whether the current cost behaviour resembles recent historical behaviour.
+
+For a given service and hour of day, the current 24-hour cost is compared with previous values observed at the same hour.
+
+The current pattern threshold is heuristic and is used only as supporting evidence.
+
+---
+
+# Real Belief Model
+
+The real agent maintains scores for:
+
+```text
+normal
+expected_pattern
+legitimate_growth
+cost_incident
+```
+
+The initial belief currently considers evidence such as:
+
+```text
+cost change
+historical cost percentile
+usage change
+unit-cost percentile
+new-account behaviour
+historical-pattern match
+```
+
+The scores are manually designed heuristic weights.
+
+They are not trained probabilities.
+
+---
+
+# Initial Policy
+
+The current action policy uses the incident score:
+
+```text
+incident < 0.30
+    → WAIT
+
+0.30 ≤ incident < 0.50
+    → GET_MORE_EVIDENCE
+
+0.50 ≤ incident < 0.70
+    → ASK_HUMAN
+
+incident ≥ 0.70
+    → ESCALATE
+```
+
+These thresholds are currently heuristic.
+
+---
+
+# Real Evidence Acquisition
+
+A major improvement in the real-data phase is that the agent can collect additional evidence directly from the FOCUS billing data.
+
+The driver-level dataset is grouped by:
+
+```text
+hour
+service
+charge description
+consumed unit
+sub-account
+```
+
+The resulting dataset contains:
+
+```text
+147,052 driver-level observations
+346 distinct charge descriptions
+78 sub-accounts
+```
+
+---
+
+# CHECK_COST_DRIVER
+
+The main second-stage evidence action is:
+
+```text
+CHECK_COST_DRIVER
+```
+
+The system investigates the dominant driver responsible for the current cost increase.
+
+The evidence includes:
+
+```text
+charge description
+sub-account
+EffectiveCost
+BilledCost
+ConsumedQuantity
+ConsumedUnit
+billed unit cost
+ListUnitPrice
+ContractedUnitPrice
+historical baseline
+```
+
+The agent then asks questions such as:
+
+```text
+Which charge caused the increase?
+
+Did usage increase?
+
+Did billed cost increase proportionally?
+
+Did the actual billing unit price change?
+
+Did a completely new cost driver appear?
+
+Is the abnormal movement only present in EffectiveCost?
+```
+
+---
+
+# Structured Real Feedback
+
+Driver-level evidence is converted into structured feedback states.
+
+The current evidence categories are:
+
+```text
+USAGE_ALIGNED_DRIVER_GROWTH
+
+NEW_COST_DRIVER
+
+EFFECTIVE_COST_ACCOUNTING_SHIFT
+
+UNEXPLAINED_DRIVER_COST_INCREASE
+
+UNIT_COST_INCREASE
+
+MIXED_DRIVER_EVIDENCE
+
+INSUFFICIENT_DRIVER_EVIDENCE
+```
+
+These feedback states are then used to update the agent's belief before the final action is selected.
+
+---
+
+# Example 1 — RDS Initial Escalation
+
+One of the highest-risk RDS observations initially produced:
+
+```text
+cost_incident ≈ 0.765
+
+Initial action:
+ESCALATE
+```
+
+The dominant driver was:
+
+```text
+RDS db.m5.4xlarge Multi-AZ MySQL
+Sub-account: Nimbus Orion
+```
+
+The deeper investigation showed:
+
+```text
+Cost change       +122.7%
+Usage change      +122.7%
+Unit-cost change      0%
+```
+
+After incorporating the driver evidence:
+
+```text
+cost_incident       ≈ 0.417
+legitimate_growth   ≈ 0.455
+```
+
+The final action changed from:
+
+```text
+ESCALATE
 ```
 
 to:
 
 ```text
-Real cloud billing records
-        ↓
-Historical baselines
-        ↓
-Observed cost anomalies
-        ↓
-Agent decisions under real data uncertainty
-```
-
-The real-data extension uses anonymized cloud billing data following the **FinOps FOCUS** specification.
-
-The goal is to replace synthetic variables such as:
-
-```text
-current_cost
-baseline_cost
-matches_historical_pattern
-```
-
-with quantities calculated directly from historical cloud billing records.
-
-This next phase will test whether the reasoning framework remains useful once the controlled assumptions of the synthetic experiment are removed.
-
----
-
-## Project Status
-
-```text
-V1  Belief-based decision agent               
-V2  Environment-aware decision policy         
-V3  Evidence gathering + feedback loop        
-Real FinOps billing-data integration           
-Production-calibrated decision system           Future work
+GET_MORE_EVIDENCE
 ```
 
 ---
 
-## Why This Project?
+# Example 2 — EffectiveCost Failure Mode
 
-The broader goal is to explore how AI agents can make decisions when:
+One of the most important findings in the project came from a failure in the original evidence implementation.
 
-- the true cause is hidden,
-- evidence is incomplete,
-- investigation has a cost,
-- actions have asymmetric consequences,
-- and the system must know when to act versus when to gather more information.
+The first version calculated:
 
-Cloud-cost management provides a practical environment for studying these problems while combining:
+```text
+EffectiveCost / ConsumedQuantity
+```
 
-- probabilistic reasoning,
-- sequential decision making,
-- data engineering,
-- cost-sensitive evaluation,
-- agent design,
-- and human-in-the-loop decision systems.
+and treated this as a unit-price signal.
+
+For one representative EFS observation:
+
+```text
+EffectiveCost increase      +270.6%
+BilledCost increase         +107.2%
+Usage increase              +107.2%
+
+Billed unit-cost change        ~0%
+List-price change                0%
+```
+
+The actual billing rate remained:
+
+```text
+$0.07 / GB
+```
+
+The evidence layer was redesigned to separate:
+
+```text
+EffectiveCost
+    → economic / accounting signal
+
+BilledCost
+    → billed-cost signal
+
+BilledCost / ConsumedQuantity
+    → actual billed unit-cost signal
+
+ListUnitPrice
+    → explicit pricing evidence
+```
+
+A new feedback category was introduced:
+
+```text
+EFFECTIVE_COST_ACCOUNTING_SHIFT
+```
+
+This correction removed the earlier false `UNIT_COST_INCREASE` behaviour.
+
+---
+
+# Current Real-Agent Experiment
+
+Current agent-ready observations:
+
+```text
+1,444
+```
+
+## Initial Decisions
+
+```text
+WAIT                 1021
+GET_MORE_EVIDENCE     192
+ASK_HUMAN             206
+ESCALATE                25
+```
+
+## Final Decisions
+
+```text
+WAIT                 1300
+GET_MORE_EVIDENCE      83
+ASK_HUMAN              61
+ESCALATE                 0
+```
+
+Total decisions changed:
+
+```text
+395 / 1,444
+≈ 27.35%
+```
+
+This demonstrates that additional evidence materially changes the initial decision.
+
+It does not prove that every final decision is correct.
+
+---
+
+# Real Feedback Distribution
+
+The latest real-data run produced:
+
+```text
+USAGE_ALIGNED_DRIVER_GROWTH        301
+NEW_COST_DRIVER                     65
+EFFECTIVE_COST_ACCOUNTING_SHIFT     57
+```
+
+After correcting the EffectiveCost interpretation:
+
+```text
+UNEXPLAINED_DRIVER_COST_INCREASE = 0
+```
+
+This should not be interpreted as evidence that no genuine incidents exist.
+
+---
+
+# Alert Episode Clustering
+
+Rolling 24-hour windows can create repeated alerts for the same underlying event.
+
+The system therefore groups consecutive alerts from the same service into operational episodes.
+
+Latest result:
+
+```text
+23 alert episodes
+```
+
+Peak action:
+
+```text
+GET_MORE_EVIDENCE    20
+ASK_HUMAN             3
+ESCALATE              0
+```
+
+Episodes by service:
+
+```text
+EKS    9
+EFS    6
+RDS    5
+S3     3
+```
+
+---
+
+# Human Review Dataset
+
+A human-review dataset was created for all 23 alert episodes.
+
+The current review produced:
+
+```text
+LEGITIMATE_GROWTH               15
+ACCOUNTING_OR_BILLING_EFFECT     5
+UNRESOLVED                       3
+```
+
+Confidence:
+
+```text
+HIGH      20
+MEDIUM     3
+```
+
+The three unresolved cases are all S3 episodes involving new cost drivers with no reliable historical baseline.
+
+---
+
+# Important Evaluation Limitation
+
+An early comparison showed:
+
+```text
+23 / 23 agreement
+```
+
+between the agent's evidence interpretation and the human-review labels.
+
+This must NOT be interpreted as:
+
+```text
+100% real-world accuracy
+```
+
+The human review was created using many of the same evidence patterns used by the agent.
+
+Therefore the result is currently treated only as:
+
+> Internal consistency between the agent's evidence interpretation and the manual review framework.
+
+It is not an independent validation benchmark.
+
+---
+
+# Current Architecture
+
+```text
+FinOps Foundation FOCUS data
+        ↓
+AWS filtering
+        ↓
+Cost decomposition
+        ↓
+Hourly service aggregation
+        ↓
+24-hour rolling windows
+        ↓
+Previous 7-day baseline
+        ↓
+Leakage-safe historical percentiles
+        ↓
+Usage alignment
+        ↓
+Historical-pattern evidence
+        ↓
+Initial belief
+        ↓
+Initial action
+        ↓
+────────────────────────────────
+If more evidence is required
+────────────────────────────────
+        ↓
+CHECK_COST_DRIVER
+        ↓
+Charge-level investigation
+        ↓
+Sub-account investigation
+        ↓
+Usage comparison
+        ↓
+Billed-cost comparison
+        ↓
+Actual unit-price comparison
+        ↓
+Structured evidence feedback
+        ↓
+Belief update
+        ↓
+Final action
+        ↓
+Alert episode clustering
+        ↓
+Human review
+```
+
+---
+
+# Tech Stack
+
+The current implementation uses:
+
+```text
+Python
+Pandas
+NumPy
+FinOps Foundation FOCUS dataset
+AWS cost-and-usage billing records
+Custom belief-state model
+Custom decision policy
+Time-series feature engineering
+Rolling windows
+Leakage-safe historical baselines
+Historical percentile features
+Entropy
+Expected information gain
+Cost-sensitive evaluation
+Driver-level evidence retrieval
+Human-in-the-loop review
+```
+
+The project currently does not use LangChain or LangGraph for the core decision logic.
+
+The core agent behaviour comes from:
+
+```text
+state
+uncertainty
+sequential decision-making
+evidence acquisition
+belief revision
+human escalation
+```
+
+---
+
+# Key Engineering Lessons
+
+## 1. A large cost increase does not necessarily mean an incident
+
+Cloud spend may increase simply because workloads are consuming more resources.
+
+## 2. Evidence semantics matter
+
+A mathematically valid feature can still represent the wrong business concept.
+
+## 3. Usage and pricing should be investigated separately
+
+A FinOps system should distinguish between:
+
+```text
+more usage
+higher pricing
+new cost drivers
+credits
+discounts
+accounting allocations
+```
+
+## 4. Agentic behaviour does not require an LLM
+
+The current agent behaves sequentially:
+
+```text
+observe
+reason
+decide
+request evidence
+update belief
+decide again
+```
+
+## 5. Alert rows are not the same as incidents
+
+Rolling windows can create many repeated alerts from a single underlying event.
+
+## 6. Real evaluation requires independent ground truth
+
+The FOCUS dataset contains billing data but does not provide definitive incident labels.
+
+## 7. Human evaluation can also overfit
+
+If the reviewer uses the same decision rules as the agent, agreement is not an independent performance measure.
+
+---
+
+# Current Limitations
+
+```text
+Only one month of real billing data
+
+No reliable incident ground-truth labels
+
+Heuristic belief-update weights
+
+Heuristic decision thresholds
+
+Belief scores are not calibrated probabilities
+
+Historical-pattern thresholds are manually chosen
+
+No reliable deployment information
+
+No reliable production/development environment signal
+
+Tags are heterogeneous and incomplete
+
+New cost drivers require external operational context
+
+Current manual review is not independent
+
+Long-term seasonality cannot yet be evaluated
+```
+
+---
+
+# Next Work
+
+## Blinded Human Evaluation
+
+The next evaluation will remove agent-generated information from the human-review interface.
+
+The reviewer should NOT see:
+
+```text
+agent feedback
+initial belief
+final belief
+initial action
+final action
+```
+
+The reviewer will instead see only raw evidence such as:
+
+```text
+service
+time period
+cost movement
+billed-cost movement
+usage movement
+unit-price movement
+charge description
+sub-account
+historical baseline
+```
+
+The human judgement will then be compared against the frozen agent only after the labels have been created.
+
+---
+
+## External Operational Evidence
+
+The unresolved S3 events show that billing data alone is not always enough.
+
+Future evidence sources could include:
+
+```text
+deployment history
+CloudWatch metrics
+application traffic
+network-flow information
+business growth indicators
+change-management systems
+service ownership metadata
+incident-management records
+```
+
+---
+
+## Learned and Calibrated Beliefs
+
+Future reviewed outcomes could be used to replace parts of the manually designed belief model.
+
+Possible methods include:
+
+```text
+logistic regression
+gradient boosting
+Bayesian models
+Platt scaling
+isotonic calibration
+```
+
+---
+
+## Evidence-Value Learning
+
+The synthetic version already experimented with:
+
+```text
+entropy
+expected information gain
+evidence cost
+```
+
+Future work could learn the real value of different evidence sources from historical investigations.
+
+---
+
+## Agent Observability
+
+A production system should store the complete decision trajectory:
+
+```text
+initial observation
+initial belief
+initial action
+evidence requested
+reason evidence was selected
+evidence returned
+belief change
+final action
+human override
+final outcome
+```
+
+---
+
+# Future Production Architecture
+
+A production version could evolve toward:
+
+```text
+Cloud billing APIs
+        ↓
+Scheduled / streaming ingestion
+        ↓
+Feature pipeline
+        ↓
+Decision agent
+        ↓
+Evidence tools
+        ↓
+Decision API
+        ↓
+PostgreSQL / event store
+        ↓
+Slack / PagerDuty / ticketing
+        ↓
+Human review
+        ↓
+Feedback store
+        ↓
+Model / policy improvement
+```
+
+Potential supporting technologies could include:
+
+```text
+AWS
+Kafka
+Airflow
+PostgreSQL
+Docker
+FastAPI
+MLflow
+CloudWatch
+CI/CD
+```
+
+These are future production-integration targets and should not be interpreted as components already implemented in the current version unless explicitly added later.
+
+---
+
+# Current Status
+
+The project has progressed through:
+
+```text
+Synthetic uncertainty model
+        ↓
+Cost-sensitive decision policy
+        ↓
+Environment-aware thresholds
+        ↓
+Sequential evidence acquisition
+        ↓
+Entropy / information-gain experiments
+        ↓
+Real FOCUS billing data
+        ↓
+Leakage-safe feature engineering
+        ↓
+Usage-cost alignment
+        ↓
+Real driver-level investigation
+        ↓
+EffectiveCost failure discovery
+        ↓
+Billing-price correction
+        ↓
+Two-stage real agent
+        ↓
+Alert episode clustering
+        ↓
+Manual episode review
+        ↓
+Blinded independent evaluation next
+```
+
+The current focus is on building an agent whose decisions are:
+
+```text
+evidence-driven
+auditable
+uncertainty-aware
+safe to escalate
+easy to investigate
+honest about what is still unknown
+```
+
+The long-term goal is a FinOps agent that can investigate unusual cloud spending, gather additional evidence when needed, explain why its decision changed, involve humans when uncertainty remains, and improve from reviewed operational outcomes.
