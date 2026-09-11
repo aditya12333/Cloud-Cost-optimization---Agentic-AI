@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="2600" height="2400" viewBox="0 0 2600 2400" role="img" aria-labelledby="diagram-title diagram-desc">
+  <title id="diagram-title">Cloud Cost Decision Agent — Version 3</title>
+  <desc id="diagram-desc">Animated flow diagram showing cloud observations, feature calculations, belief updates, the environment-aware initial decision, optional evidence gathering, feedback, a second belief update, the final action, uncertainty output, and the saved decision trail.</desc>
+  <defs>
+    <linearGradient id="page-bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FBFAFF"/><stop offset="0.52" stop-color="#F5F8FF"/><stop offset="1" stop-color="#F9FCFA"/></linearGradient>
+    <linearGradient id="hero" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5639B7"/><stop offset="0.55" stop-color="#7257D8"/><stop offset="1" stop-color="#1E9BA5"/></linearGradient>
+    <linearGradient id="decision-fill" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5D45C6"/><stop offset="1" stop-color="#2D91A1"/></linearGradient>
+    <linearGradient id="output-fill" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#EDE9FF"/><stop offset="1" stop-color="#DFF7F1"/></linearGradient>
+    <pattern id="dots" width="44" height="44" patternUnits="userSpaceOnUse"><circle cx="5" cy="5" r="3" fill="#755FDA" opacity="0.10"/></pattern>
+    <filter id="soft-shadow" x="-18%" y="-18%" width="136%" height="145%"><feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#34256B" flood-opacity="0.12"/></filter>
+    <filter id="glow" x="-160%" y="-160%" width="420%" height="420%"><feGaussianBlur stdDeviation="10" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <marker id="arrow-head" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="12" markerHeight="12" orient="auto-start-reverse"><path d="M1 1 L11 6 L1 11 Z" fill="#627287"/></marker>
+    <style>
+      .hero-title { font: 700 72px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #FFFFFF; letter-spacing: -1px; }
+      .hero-subtitle { font: 400 29px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #EEEAFE; }
+      .eyebrow { font: 700 22px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #6A53D1; letter-spacing: 2.2px; }
+      .title { font: 700 34px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #24314B; letter-spacing: -0.4px; }
+      .copy { font: 400 25px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #627084; }
+      .copy-small { font: 400 22px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #6C7789; }
+      .badge-number { font: 700 25px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #FFFFFF; }
+      .diamond-text { font: 700 31px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #FFFFFF; }
+      .branch-label { font: 700 22px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #4B5870; letter-spacing: 1.2px; }
+      .chip-text { font: 700 19px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #5E49BD; letter-spacing: 1px; }
+      .footer-text { font: 500 21px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #596779; }
+      .card { fill: #FFFFFF; stroke: #E4E2F0; stroke-width: 3; }
+      .card-violet { fill: #F2EFFF; stroke: #C8BEF4; stroke-width: 3; }
+      .card-teal { fill: #EAF9F7; stroke: #A7DED8; stroke-width: 3; }
+      .card-coral { fill: #FFF1ED; stroke: #F4C0B2; stroke-width: 3; }
+      .card-yellow { fill: #FFF8E3; stroke: #EAD48D; stroke-width: 3; }
+      .connector { fill: none; stroke: #76869A; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; marker-end: url(#arrow-head); }
+      .flow-trace { fill: none; stroke: #6D52D0; stroke-width: 7; stroke-linecap: round; stroke-dasharray: 5 24; animation: travel 1.15s linear infinite; }
+      .flow-trace-teal { fill: none; stroke: #22A5A5; stroke-width: 7; stroke-linecap: round; stroke-dasharray: 5 24; animation: travel 1.15s linear infinite; }
+      .bypass { stroke-dasharray: 15 15; opacity: 0.8; }
+      .particle-violet { fill: #8267E8; filter: url(#glow); }
+      .particle-teal { fill: #29B8B2; filter: url(#glow); }
+      @keyframes travel { to { stroke-dashoffset: -58; } }
+      @media (prefers-reduced-motion: reduce) { .flow-trace, .flow-trace-teal { animation: none; } .moving-particle { display: none; } }
+    </style>
+  </defs>
+  <rect width="2600" height="2400" fill="url(#page-bg)"/>
+  <rect width="2600" height="2400" fill="url(#dots)"/>
+  <g transform="translate(0 -230)">
+  <rect x="1040" y="292" width="520" height="54" rx="27" fill="#E9E4FF"/><text x="1300" y="328" text-anchor="middle" class="chip-text">PHASE 1 · OBSERVE AND ESTIMATE</text>
+  <g filter="url(#soft-shadow)"><rect x="120" y="390" width="650" height="225" rx="38" class="card"/><rect x="975" y="390" width="650" height="225" rx="38" class="card-violet"/><rect x="1830" y="390" width="650" height="225" rx="38" class="card-teal"/></g>
+  <circle cx="180" cy="450" r="32" fill="#6D52D0"/><text x="180" y="459" text-anchor="middle" class="badge-number">1</text><text x="230" y="457" class="eyebrow">OBSERVE</text>
+  <text x="445" y="515" text-anchor="middle" class="title">Read the cloud-cost case</text><text x="445" y="558" text-anchor="middle" class="copy-small">Cost · usage · historical pattern</text><text x="445" y="591" text-anchor="middle" class="copy-small">recent deployment · environment</text>
+  <circle cx="1035" cy="450" r="32" fill="#6D52D0"/><text x="1035" y="459" text-anchor="middle" class="badge-number">2</text><text x="1085" y="457" class="eyebrow">CALCULATE</text>
+  <text x="1300" y="515" text-anchor="middle" class="title">Create observable signals</text><text x="1300" y="559" text-anchor="middle" class="copy">Cost change % · usage change %</text><text x="1300" y="592" text-anchor="middle" class="copy-small">Raw billing values become comparable</text>
+  <circle cx="1890" cy="450" r="32" fill="#269FA2"/><text x="1890" y="459" text-anchor="middle" class="badge-number">3</text><text x="1940" y="457" class="eyebrow">FORM A BELIEF</text>
+  <text x="2155" y="515" text-anchor="middle" class="title">Update four probabilities</text><text x="2155" y="559" text-anchor="middle" class="copy-small">Normal · expected pattern</text><text x="2155" y="592" text-anchor="middle" class="copy-small">legitimate growth · cost incident</text>
+
+  <path id="flow-1" d="M770 503 H975" class="connector"/><use xlink:href="#flow-1" class="flow-trace"/><circle r="11" class="moving-particle particle-violet"><animateMotion dur="2.2s" repeatCount="indefinite"><mpath xlink:href="#flow-1"/></animateMotion></circle>
+  <path id="flow-2" d="M1625 503 H1830" class="connector"/><use xlink:href="#flow-2" class="flow-trace-teal"/><circle r="11" class="moving-particle particle-teal"><animateMotion dur="2.2s" begin="0.8s" repeatCount="indefinite"><mpath xlink:href="#flow-2"/></animateMotion></circle>
+  <path id="flow-3" d="M2155 615 V690 Q2155 742 2103 742 H1660" class="connector"/><use xlink:href="#flow-3" class="flow-trace-teal"/><circle r="11" class="moving-particle particle-teal"><animateMotion dur="3.2s" begin="1.3s" repeatCount="indefinite"><mpath xlink:href="#flow-3"/></animateMotion></circle>
+
+  <g filter="url(#soft-shadow)"><rect x="940" y="665" width="720" height="168" rx="38" class="card"/></g>
+  <circle cx="1005" cy="720" r="32" fill="#6D52D0"/><text x="1005" y="729" text-anchor="middle" class="badge-number">4</text><text x="1060" y="727" class="eyebrow">INITIAL DECISION</text>
+  <text x="1300" y="780" text-anchor="middle" class="title">Apply environment-aware thresholds</text><text x="1300" y="815" text-anchor="middle" class="copy-small">Production reacts earlier · development is more tolerant</text>
+
+  <path id="flow-4" d="M1300 833 V930" class="connector"/><use xlink:href="#flow-4" class="flow-trace"/><circle r="11" class="moving-particle particle-violet"><animateMotion dur="1.8s" begin="0.4s" repeatCount="indefinite"><mpath xlink:href="#flow-4"/></animateMotion></circle>
+  <polygon points="1300,920 1655,1085 1300,1250 945,1085" fill="url(#decision-fill)" filter="url(#soft-shadow)"/>
+  <text x="1300" y="1062" text-anchor="middle" class="diamond-text">Is the initial action</text><text x="1300" y="1110" text-anchor="middle" class="diamond-text">GET_MORE_EVIDENCE?</text>
+  <rect x="643" y="1015" width="105" height="48" rx="24" fill="#ECEAF3"/><text x="696" y="1048" text-anchor="middle" class="branch-label">NO</text>
+  <rect x="1850" y="1015" width="115" height="48" rx="24" fill="#DFF5F2"/><text x="1908" y="1048" text-anchor="middle" class="branch-label">YES</text>
+
+  <path id="flow-no" d="M945 1085 H470 Q400 1085 400 1155 V1340" class="connector bypass"/><use xlink:href="#flow-no" class="flow-trace"/><circle r="11" class="moving-particle particle-violet"><animateMotion dur="4s" repeatCount="indefinite"><mpath xlink:href="#flow-no"/></animateMotion></circle>
+  <g filter="url(#soft-shadow)"><rect x="105" y="1340" width="590" height="210" rx="38" class="card"/></g>
+  <text x="400" y="1402" text-anchor="middle" class="eyebrow">NO INVESTIGATION NEEDED</text><text x="400" y="1460" text-anchor="middle" class="title">Keep the initial action</text><text x="400" y="1507" text-anchor="middle" class="copy">WAIT · ASK HUMAN · ESCALATE</text>
+
+  <path id="flow-yes" d="M1655 1085 H2040 Q2110 1085 2110 1155 V1295" class="connector"/><use xlink:href="#flow-yes" class="flow-trace-teal"/><circle r="12" class="moving-particle particle-teal"><animateMotion dur="3.8s" begin="0.6s" repeatCount="indefinite"><mpath xlink:href="#flow-yes"/></animateMotion></circle>
+  <rect x="1710" y="1218" width="400" height="52" rx="26" fill="#DFF5F2"/><text x="1910" y="1253" text-anchor="middle" class="chip-text">PHASE 2 · INVESTIGATE</text>
+  <g filter="url(#soft-shadow)"><rect x="1510" y="1310" width="900" height="220" rx="40" class="card-yellow"/></g>
+  <circle cx="1580" cy="1375" r="32" fill="#DAA62D"/><text x="1580" y="1384" text-anchor="middle" class="badge-number">5</text><text x="1635" y="1382" class="eyebrow">CHOOSE ONE EVIDENCE SOURCE</text>
+  <text x="1960" y="1440" text-anchor="middle" class="title">Use the V3 heuristic selector</text><text x="1960" y="1484" text-anchor="middle" class="copy-small">Check service breakdown · or deployment details</text><text x="1960" y="1516" text-anchor="middle" class="copy-small">Ranked using usefulness score ÷ collection cost</text>
+  <path id="flow-6" d="M1960 1530 V1605" class="connector"/><use xlink:href="#flow-6" class="flow-trace-teal"/><circle r="11" class="moving-particle particle-teal"><animateMotion dur="1.6s" begin="0.2s" repeatCount="indefinite"><mpath xlink:href="#flow-6"/></animateMotion></circle>
+
+  <g filter="url(#soft-shadow)"><rect x="1510" y="1605" width="900" height="220" rx="40" class="card-coral"/></g>
+  <circle cx="1580" cy="1670" r="32" fill="#E8785E"/><text x="1580" y="1679" text-anchor="middle" class="badge-number">6</text><text x="1635" y="1677" class="eyebrow">RECEIVE FEEDBACK</text>
+  <text x="1960" y="1735" text-anchor="middle" class="title">Observe the investigation result</text><text x="1960" y="1779" text-anchor="middle" class="copy-small">Example: concentrated service spike</text><text x="1960" y="1811" text-anchor="middle" class="copy-small">The test simulator hides the true state from the agent</text>
+  <path id="flow-7" d="M1510 1715 H1360 Q1300 1715 1300 1775 V1885" class="connector"/><use xlink:href="#flow-7" class="flow-trace-teal"/><circle r="12" class="moving-particle particle-teal"><animateMotion dur="3.2s" begin="1s" repeatCount="indefinite"><mpath xlink:href="#flow-7"/></animateMotion></circle>
+
+  <rect x="1015" y="1830" width="570" height="52" rx="26" fill="#E9E4FF"/><text x="1300" y="1865" text-anchor="middle" class="chip-text">PHASE 3 · UPDATE AND ACT</text>
+  <g filter="url(#soft-shadow)"><rect x="800" y="1900" width="1000" height="195" rx="40" class="card-teal"/></g>
+  <circle cx="875" cy="1963" r="32" fill="#269FA2"/><text x="875" y="1972" text-anchor="middle" class="badge-number">7</text><text x="930" y="1970" class="eyebrow">UPDATE THE BELIEF</text>
+  <text x="1300" y="2025" text-anchor="middle" class="title">Use the feedback to change the four probabilities</text><text x="1300" y="2070" text-anchor="middle" class="copy-small">New evidence can lower suspicion or increase incident risk</text>
+  <path id="flow-8" d="M1300 2095 V2158" class="connector"/><use xlink:href="#flow-8" class="flow-trace"/><circle r="11" class="moving-particle particle-violet"><animateMotion dur="1.5s" repeatCount="indefinite"><mpath xlink:href="#flow-8"/></animateMotion></circle>
+
+  <g filter="url(#soft-shadow)"><rect x="930" y="2160" width="740" height="165" rx="38" class="card-violet"/></g>
+  <circle cx="995" cy="2214" r="32" fill="#6D52D0"/><text x="995" y="2223" text-anchor="middle" class="badge-number">8</text><text x="1050" y="2221" class="eyebrow">FINAL DECISION</text>
+  <text x="1300" y="2276" text-anchor="middle" class="title">Apply the environment-aware policy again</text>
+  <path id="flow-9" d="M1300 2325 V2365" class="connector"/><use xlink:href="#flow-9" class="flow-trace-teal"/>
+
+  <path id="flow-no-output" d="M400 1550 V2428 Q400 2480 452 2480 H745" class="connector bypass"/><use xlink:href="#flow-no-output" class="flow-trace"/><circle r="12" class="moving-particle particle-violet"><animateMotion dur="7s" begin="1.2s" repeatCount="indefinite"><mpath xlink:href="#flow-no-output"/></animateMotion></circle>
+  <g filter="url(#soft-shadow)"><rect x="745" y="2372" width="1110" height="170" rx="42" fill="url(#output-fill)" stroke="#9ED8C9" stroke-width="3"/></g>
+  <text x="1300" y="2427" text-anchor="middle" class="eyebrow">OUTPUT AND DECISION TRAIL</text><text x="1300" y="2481" text-anchor="middle" class="title">Final action + predicted state</text><text x="1300" y="2522" text-anchor="middle" class="copy-small">If the top two probabilities differ by less than 0.02, report “uncertain”</text>
+  <text x="1300" y="2582" text-anchor="middle" class="footer-text">Recorded: initial action · evidence · feedback · final action · belief distribution · evaluated trajectory cost</text>
+  </g>
+</svg>

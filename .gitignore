@@ -1,0 +1,6 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+
+# Raw source data is too large for standard GitHub storage.
+data/real/focus_data_table.csv.gz
