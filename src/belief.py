@@ -139,6 +139,16 @@ def update_from_feedback(belief, feedback):
         belief["cost_incident"] += 0.20
         belief["normal"] -= 0.10
 
+    elif feedback == "NO_COST_RELEVANT_CHANGE":
+        belief["cost_incident"] -= 0.10
+        belief["expected_pattern"] += 0.05
+        belief["legitimate_growth"] += 0.05
+
+    elif feedback == "NO_CLEAR_SERVICE_CAUSE":
+        belief["cost_incident"] -= 0.10
+        belief["normal"] += 0.05
+        belief["expected_pattern"] += 0.05
+
     # normalize
     total = sum(belief.values())
 

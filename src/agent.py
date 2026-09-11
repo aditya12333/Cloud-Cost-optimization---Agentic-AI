@@ -9,7 +9,7 @@ from belief import (
 from policy import select_action, select_action_v2
 from evidence import select_evidence
 from feedback import simulate_feedback
-
+from information import select_evidence_by_information_gain
 
 def run_agent(case, version="v1"):
 
@@ -35,7 +35,7 @@ def run_agent(case, version="v1"):
     )
 
     # 3. Make initial decision
-    if version in ["v2", "v3"]:
+    if version in ["v2", "v3", "v4"]:
         initial_action = select_action_v2(
             belief,
             case["environment"]
@@ -49,13 +49,23 @@ def run_agent(case, version="v1"):
     evidence = None
     feedback = None
 
-    # 4. V3 evidence loop
-    if version == "v3" and initial_action == "GET_MORE_EVIDENCE":
+    if version in ["v3", "v4"] and initial_action == "GET_MORE_EVIDENCE":
 
-        evidence = select_evidence(
-            case,
-            belief
-        )
+        if version == "v3":
+
+            # Existing heuristic evidence selector
+            evidence = select_evidence(
+                case,
+                belief
+            )
+
+        elif version == "v4":
+
+            # Information-gain evidence selector
+            evidence, evidence_scores = select_evidence_by_information_gain(
+                case,
+                belief
+            )
 
         feedback = simulate_feedback(
             case,
@@ -67,7 +77,6 @@ def run_agent(case, version="v1"):
             feedback
         )
 
-        # Make a new decision after feedback
         final_action = select_action_v2(
             belief,
             case["environment"]
@@ -79,4 +88,4 @@ def run_agent(case, version="v1"):
         final_action,
         evidence,
         feedback
-    )
+)
